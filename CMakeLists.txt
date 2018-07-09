@@ -12,9 +12,11 @@ if (UNIX)
 endif(UNIX)
 
 find_package(Poco REQUIRED COMPONENTS Foundation Util Net JSON)
+find_package(SDL2 REQUIRED)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${Poco_INCLUDE_DIRS})
+include_directories(${SDL2_INCLUDE_DIRS})
 
 link_directories(${CMAKE_SOURCE_DIR}/webrtc/lib/x64/Debug)
 
@@ -33,12 +35,13 @@ add_executable(
         src/network/HttpRequestHandler.hpp
         src/network/HttpClient.cpp
         src/network/HttpClient.hpp
-)
+        src/render/FrameProducer.cpp src/render/FrameProducer.hpp src/render/SDLRenderer.cpp src/render/SDLRenderer.hpp src/render/FrameConsumerInterface.hpp)
 
 target_include_directories(dins PRIVATE webrtc/include)
 target_link_libraries(
         dins
         ${Poco_LIBRARIES}
+        ${SDL2_LIBRARIES}
         webrtc_full
         X11
 )

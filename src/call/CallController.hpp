@@ -6,6 +6,12 @@
 #include <Poco/JSON/Object.h>
 
 #include "network/RequestHandlerInterface.hpp"
+#include "render/FrameProducer.hpp"
+
+namespace render
+{
+class FrameConsumerInterface;
+}
 
 namespace call
 {
@@ -30,7 +36,7 @@ class RequestSenderInterface;
 class CallController : public network::RequestHandlerInterface, public webrtc::PeerConnectionObserver, public webrtc::CreateSessionDescriptionObserver
 {
 public:
-  CallController(RequestSenderInterface& requestSender, const std::string& localPort);
+  CallController(render::FrameConsumerInterface& frameConsumer, RequestSenderInterface& requestSender, const std::string& localPort);
 
   void call(const std::string& callee);
 
@@ -64,10 +70,13 @@ private:
   rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> peerConnectionFactory;
   rtc::scoped_refptr<webrtc::PeerConnectionInterface> peerConnection;
 
+  render::FrameConsumerInterface& frameConsumer;
   RequestSenderInterface& requestSender;
   State state;
   std::string remoteAddress;
   std::string localPort;
+
+  std::unique_ptr<render::FrameProducer> frameProducer;
 };
 
 }

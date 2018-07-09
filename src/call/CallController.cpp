@@ -11,14 +11,16 @@
 #include <Poco/JSON/Parser.h>
 #include <Poco/JSON/Stringifier.h>
 #include <Poco/JSON/Object.h>
+#include <thread>
 
 #include "RequestSenderInterface.hpp"
 
 namespace call
 {
 
-CallController::CallController(RequestSenderInterface& requestSender, const std::string& localPort)
+CallController::CallController(render::FrameConsumerInterface& frameConsumer, RequestSenderInterface& requestSender, const std::string& localPort)
     : peerConnectionFactory(createPeerConnectionFactory()),
+      frameConsumer(frameConsumer),
       requestSender(requestSender),
       state(State::IDLE),
       localPort(localPort)
@@ -94,7 +96,11 @@ bool CallController::onIceCandidateRequest(const std::string &callerHost, const 
   auto sdp = json->getValue<std::string>("candidate");
 
   auto iceCandidate = webrtc::CreateIceCandidate(sdpMid, sdpMLineIndexMid, sdp, nullptr);
-  peerConnection->AddIceCandidate(iceCandidate);
+
+  // TODO run in peer connection thread
+  std::thread([this, iceCandidate]() {
+    peerConnection->AddIceCandidate(iceCandidate);
+  }).detach();
 
   return true;
 }
@@ -197,15 +203,15 @@ rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> CallController::creat
   rtc::InitRandom(rtc::Time());
   rtc::ThreadManager::Instance()->WrapCurrentThread();
 
-  auto signalingThread = new rtc::Thread();
+  auto networkThread = new rtc::Thread();
   auto workerThread = new rtc::Thread();
 
-  if (!signalingThread->Start() || !workerThread->Start()) {
+  if (!networkThread->Start() || !workerThread->Start()) {
     throw std::runtime_error("Cant run rtc threads");
   }
 
   return webrtc::CreatePeerConnectionFactory(
-      signalingThread,
+      networkThread,
       workerThread,
       nullptr,
       nullptr,
@@ -215,7 +221,19 @@ rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> CallController::creat
 
 void CallController::OnAddStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream)
 {
-  std::cout << "new remote stream" << std::endl;
+  if (frameProducer)
+  {
+    return;
+  }
+
+  auto videoTracks = stream->GetVideoTracks();
+  if (videoTracks.empty())
+  {
+    return;
+  }
+
+  auto track = videoTracks[0];
+  frameProducer = std::unique_ptr<render::FrameProducer>(new render::FrameProducer(frameConsumer, track));
 }
 
 void CallController::OnRemoveStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream)

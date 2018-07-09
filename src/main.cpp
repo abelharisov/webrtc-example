@@ -8,6 +8,7 @@
 #include "call/CallController.hpp"
 #include "network/Server.hpp"
 #include "network/HttpClient.hpp"
+#include "render/SDLRenderer.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -19,8 +20,9 @@ int main(int argc, char *argv[])
 
   int port = std::stoi(std::string(argv[1]));
 
+  render::SDLRenderer renderer;
   network::HttpClient httpClient;
-  call::CallController callController(httpClient, std::to_string(port));
+  call::CallController callController(renderer, httpClient, std::to_string(port));
   network::Server server(port, callController);
 
   server.start();
