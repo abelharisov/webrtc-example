@@ -17,32 +17,12 @@
 namespace call
 {
 
-CallController::CallController(RequestSenderInterface& requestSender)
-    : requestSender(requestSender),
-      state(State::IDLE)
-{
-  rtc::InitializeSSL();
-  rtc::InitRandom(rtc::Time());
-  rtc::ThreadManager::Instance()->WrapCurrentThread();
-
-  auto signalingThread = new rtc::Thread();
-  auto workerThread = new rtc::Thread();
-
-  signalingThread->SetName("signaling_thread", nullptr);
-  workerThread->SetName("worker_thread", nullptr);
-
-  if (!signalingThread->Start() || !workerThread->Start()) {
-    throw std::runtime_error("Cant run rtc threads");
-  }
-
-  peerConnectionFactory = webrtc::CreatePeerConnectionFactory(
-          signalingThread,
-          workerThread,
-          nullptr,
-          nullptr,
-          nullptr
-  ).release();
-}
+CallController::CallController(RequestSenderInterface& requestSender, const std::string& localPort)
+    : peerConnectionFactory(createPeerConnectionFactory()),
+      requestSender(requestSender),
+      state(State::IDLE),
+      localPort(localPort)
+{}
 
 void CallController::call(const std::string &callee)
 {
@@ -56,10 +36,11 @@ void CallController::call(const std::string &callee)
 
   peerConnection = createPeerConnection();
   configureOutputMedia(peerConnection);
+
   peerConnection->CreateOffer(this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
 }
 
-bool CallController::onCallRequest(const std::string &caller, const std::string &data)
+bool CallController::onCallRequest(const std::string &callerHost, const std::string &data)
 {
   if (state != State::IDLE)
   {
@@ -67,16 +48,15 @@ bool CallController::onCallRequest(const std::string &caller, const std::string 
   }
 
   state = State::CALL_IN;
-  remoteAddress = caller;
 
-  Poco::JSON::Parser parser;
-  auto parsed = parser.parse(data);
-  auto callData = parsed.extract<Poco::JSON::Object::Ptr>();
-  auto type = callData->getValue<std::string>("type");
-  auto sdp = callData->getValue<std::string>("sdp");
+  auto json = parseJson(data);
+  auto type = json->getValue<std::string>("type");
+  auto sdp = json->getValue<std::string>("sdp");
+  auto callerPort = json->getValue<std::string>("port");
 
-  webrtc::PeerConnectionInterface::RTCConfiguration rtcConfiguration;
-  peerConnection = peerConnectionFactory->CreatePeerConnection(rtcConfiguration, nullptr, nullptr, this);
+  remoteAddress = callerHost + std::string(":") + callerPort;
+
+  peerConnection = createPeerConnection();
   configureOutputMedia(peerConnection);
 
   auto sessionDescription = webrtc::CreateSessionDescription(type, sdp, nullptr);
@@ -86,12 +66,15 @@ bool CallController::onCallRequest(const std::string &caller, const std::string 
   return true;
 }
 
-bool CallController::onAnswerRequest(const std::string &caller, const std::string &data)
+bool CallController::onAnswerRequest(const std::string &callerHost, const std::string &data)
 {
-  Poco::JSON::Parser parser;
-  auto callData = parser.parse(data).extract<Poco::JSON::Object>();
-  auto type = callData.getValue<std::string>("type");
-  auto sdp = callData.getValue<std::string>("sdp");
+  if (remoteAddress.find(callerHost) == std::string::npos) {
+    return false;
+  }
+
+  auto json = parseJson(data);
+  auto type = json->getValue<std::string>("type");
+  auto sdp = json->getValue<std::string>("sdp");
 
   auto sessionDescription = webrtc::CreateSessionDescription(type, sdp, nullptr);
   peerConnection->SetRemoteDescription(DummySetSessionDescriptionObserver::create(), sessionDescription);
@@ -99,20 +82,22 @@ bool CallController::onAnswerRequest(const std::string &caller, const std::strin
   return true;
 }
 
-bool CallController::onIceCandidateRequest(const std::string &caller, const std::string &data)
+bool CallController::onIceCandidateRequest(const std::string &callerHost, const std::string &data)
 {
-  Poco::JSON::Parser parser;
-  auto iceData = parser.parse(data).extract<Poco::JSON::Object>();
-  auto sdpMid = iceData.getValue<std::string>("sdpMid");
-  auto sdpMLineIndexMid = iceData.getValue<int>("sdpMLineIndexMid");
-  auto sdp = iceData.getValue<std::string>("candidate");
+  if (remoteAddress.find(callerHost) == std::string::npos) {
+    return false;
+  }
+
+  auto json = parseJson(data);
+  auto sdpMid = json->getValue<std::string>("sdpMid");
+  auto sdpMLineIndexMid = json->getValue<int>("sdpMLineIndexMid");
+  auto sdp = json->getValue<std::string>("candidate");
 
   auto iceCandidate = webrtc::CreateIceCandidate(sdpMid, sdpMLineIndexMid, sdp, nullptr);
   peerConnection->AddIceCandidate(iceCandidate);
 
   return true;
 }
-
 
 void CallController::OnSuccess(webrtc::SessionDescriptionInterface *desc)
 {
@@ -123,6 +108,7 @@ void CallController::OnSuccess(webrtc::SessionDescriptionInterface *desc)
   Poco::JSON::Object jsonObject;
   jsonObject.set("type", desc->type());
   jsonObject.set("sdp", description);
+  jsonObject.set("port", localPort);
 
   std::stringstream stream;
   Poco::JSON::Stringifier::stringify(jsonObject, stream);
@@ -154,7 +140,16 @@ void CallController::OnIceCandidate(const webrtc::IceCandidateInterface *candida
 {
   std::string candidateString;
   candidate->ToString(&candidateString);
-  requestSender.sendRequest(remoteAddress, "iceCandidate", candidateString);
+
+  Poco::JSON::Object jsonObject;
+  jsonObject.set("sdpMid", candidate->sdp_mid());
+  jsonObject.set("sdpMLineIndexMid", candidate->sdp_mline_index());
+  jsonObject.set("candidate", candidateString);
+
+  std::stringstream stream;
+  Poco::JSON::Stringifier::stringify(jsonObject, stream);
+
+  requestSender.sendRequest(remoteAddress, "iceCandidate", stream.str());
 }
 
 void CallController::configureOutputMedia(rtc::scoped_refptr<webrtc::PeerConnectionInterface> peerConnection)
@@ -164,11 +159,10 @@ void CallController::configureOutputMedia(rtc::scoped_refptr<webrtc::PeerConnect
   std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> deviceInfo(webrtc::VideoCaptureFactory::CreateDeviceInfo());
   for (int i = 0; i < deviceInfo->NumberOfDevices(); ++i)
   {
-    const uint32_t kSize = 256;
-    char name[kSize] = {0};
-    char id[kSize] = {0};
-    deviceInfo->GetDeviceName(i, name, kSize, id, kSize);
-    std::cout << name << id << std::endl;
+    const uint32_t size = 256;
+    char name[size] = {0};
+    char id[size] = {0};
+    deviceInfo->GetDeviceName(i, name, size, id, size);
     videoCapturer = factory.Create(cricket::Device(name, id));
     if (videoCapturer) {
       break;
@@ -181,9 +175,6 @@ void CallController::configureOutputMedia(rtc::scoped_refptr<webrtc::PeerConnect
 
   auto audioTrack = peerConnectionFactory->CreateAudioTrack("audio_label", peerConnectionFactory->CreateAudioSource(cricket::AudioOptions()));
   auto videoTrack = peerConnectionFactory->CreateVideoTrack("video_label", peerConnectionFactory->CreateVideoSource(std::move(videoCapturer), nullptr));
-  auto stream = peerConnectionFactory->CreateLocalMediaStream("");
-//  stream->AddTrack(audioTrack);
-//  stream->AddTrack(videoTrack);
 
   peerConnection->AddTrack(audioTrack, {});
   peerConnection->AddTrack(videoTrack, {});
@@ -200,6 +191,27 @@ rtc::scoped_refptr<webrtc::PeerConnectionInterface> CallController::createPeerCo
   return peerConnectionFactory->CreatePeerConnection(rtcConfiguration, nullptr, nullptr, nullptr, this);
 }
 
+rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> CallController::createPeerConnectionFactory()
+{
+  rtc::InitializeSSL();
+  rtc::InitRandom(rtc::Time());
+  rtc::ThreadManager::Instance()->WrapCurrentThread();
+
+  auto signalingThread = new rtc::Thread();
+  auto workerThread = new rtc::Thread();
+
+  if (!signalingThread->Start() || !workerThread->Start()) {
+    throw std::runtime_error("Cant run rtc threads");
+  }
+
+  return webrtc::CreatePeerConnectionFactory(
+      signalingThread,
+      workerThread,
+      nullptr,
+      nullptr,
+      nullptr
+  );
+}
 
 void CallController::OnAddStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream)
 {
@@ -224,6 +236,14 @@ int CallController::AddRef() const
 int CallController::Release() const
 {
   return 0;
+}
+
+Poco::JSON::Object::Ptr CallController::parseJson(const std::string &data)
+{
+  Poco::JSON::Parser parser;
+  auto parsed = parser.parse(data);
+
+  return parsed.extract<Poco::JSON::Object::Ptr>();
 }
 
 void DummySetSessionDescriptionObserver::OnSuccess()

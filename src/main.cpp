@@ -13,24 +13,20 @@ int main(int argc, char *argv[])
 {
   if (argc <= 1)
   {
-    throw std::runtime_error("You should specify port to listen");
+    std::cout << "You should specify port to listen" << std::endl;
+    return EXIT_FAILURE;
   }
 
   int port = std::stoi(std::string(argv[1]));
 
-  if ((port < 1) || (port > 65535))
-  {
-    throw std::runtime_error("Error: not a valid port");
-  }
-
   network::HttpClient httpClient;
-  call::CallController callController(httpClient);
+  call::CallController callController(httpClient, std::to_string(port));
   network::Server server(port, callController);
 
   server.start();
 
   std::string address;
-  std::cout << "Call to ip:port: " << std::endl;
+  std::cout << "Enter address to call (ip:port): ";
   std::cin >> address;
 
   callController.call(address);
@@ -42,4 +38,6 @@ int main(int argc, char *argv[])
 #endif
 
   terminator.wait();
+
+  return EXIT_SUCCESS;
 }

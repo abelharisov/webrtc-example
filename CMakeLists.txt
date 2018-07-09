@@ -2,9 +2,6 @@ cmake_minimum_required(VERSION 3.10)
 project(dins)
 
 set(CMAKE_CXX_STANDARD 11)
-#set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-#set(BUILD_SHARED_LIBS OFF)
-#set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 if (WIN32)
     add_definitions(-DWEBRTC_WIN)
@@ -14,12 +11,12 @@ if (UNIX)
     add_definitions(-DWEBRTC_POSIX)
 endif(UNIX)
 
-link_directories(${CMAKE_SOURCE_DIR}/webrtc/lib/x64/Debug)
+find_package(Poco REQUIRED COMPONENTS Foundation Util Net JSON)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
-
-find_package(Poco REQUIRED COMPONENTS Foundation Util Net JSON)
 include_directories(${Poco_INCLUDE_DIRS})
+
+link_directories(${CMAKE_SOURCE_DIR}/webrtc/lib/x64/Debug)
 
 add_executable(
         dins
@@ -39,4 +36,9 @@ add_executable(
 )
 
 target_include_directories(dins PRIVATE webrtc/include)
-target_link_libraries(dins webrtc_full ${Poco_LIBRARIES} X11 xcb Xau Xdmcp)
+target_link_libraries(
+        dins
+        ${Poco_LIBRARIES}
+        webrtc_full
+        X11
+)

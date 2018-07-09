@@ -4,17 +4,18 @@
 #include <Poco/Net/HTTPClientSession.h>
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
+#include <iostream>
 
 namespace network
 {
 
 void HttpClient::sendRequest(const std::string &address, const std::string &path, const std::string &data)
 {
-  Poco::URI uri(address);
-  uri.setPath(path);
+  std::string uri = std::string("http://") + address + std::string("/") + path;
 
-  Poco::Net::HTTPClientSession session(uri.getHost(), uri.getPort());
-  Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST, uri.toString());
+  Poco::Net::SocketAddress socketAddress(address);
+  Poco::Net::HTTPClientSession session(socketAddress);
+  Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST, uri);
   request.setContentLength(data.size());
   auto& outStream = session.sendRequest(request);
   outStream << data;
@@ -23,7 +24,7 @@ void HttpClient::sendRequest(const std::string &address, const std::string &path
   session.receiveResponse(response);
 
   if (response.getStatus() != response.HTTP_OK) {
-    throw std::runtime_error("Bad http request");
+    throw std::runtime_error("Bad http response");
   }
 }
 

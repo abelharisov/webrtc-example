@@ -3,6 +3,7 @@
 
 #include <string>
 #include <webrtc/api/peerconnectioninterface.h>
+#include <Poco/JSON/Object.h>
 
 #include "network/RequestHandlerInterface.hpp"
 
@@ -29,14 +30,14 @@ class RequestSenderInterface;
 class CallController : public network::RequestHandlerInterface, public webrtc::PeerConnectionObserver, public webrtc::CreateSessionDescriptionObserver
 {
 public:
-  explicit CallController(RequestSenderInterface& requestSender);
+  CallController(RequestSenderInterface& requestSender, const std::string& localPort);
 
   void call(const std::string& callee);
 
   // RequestHandlerInterface
-  bool onCallRequest(const std::string &caller, const std::string &data) override;
-  bool onAnswerRequest(const std::string &caller, const std::string &data) override;
-  bool onIceCandidateRequest(const std::string &caller, const std::string &data) override;
+  bool onCallRequest(const std::string &callerHost, const std::string &data) override;
+  bool onAnswerRequest(const std::string &callerHost, const std::string &data) override;
+  bool onIceCandidateRequest(const std::string &callerHost, const std::string &data) override;
 
   // CreateSessionDescriptionObserver
   void OnSuccess(webrtc::SessionDescriptionInterface *desc) override;
@@ -55,8 +56,10 @@ public:
   int Release() const override;
 
 private:
+  rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> createPeerConnectionFactory();
   rtc::scoped_refptr<webrtc::PeerConnectionInterface> createPeerConnection();
   void configureOutputMedia(rtc::scoped_refptr<webrtc::PeerConnectionInterface> peerConnection);
+  Poco::JSON::Object::Ptr parseJson(const std::string& data);
 
   rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> peerConnectionFactory;
   rtc::scoped_refptr<webrtc::PeerConnectionInterface> peerConnection;
@@ -64,6 +67,7 @@ private:
   RequestSenderInterface& requestSender;
   State state;
   std::string remoteAddress;
+  std::string localPort;
 };
 
 }
