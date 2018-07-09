@@ -4,11 +4,6 @@
 #include <Poco/Event.h>
 #include <Poco/NamedEvent.h>
 #include <Poco/Process.h>
-#include <webrtc/base/ssladapter.h>
-#include <webrtc/base/thread.h>
-#include <webrtc/base/physicalsocketserver.h>
-#include <thread>
-#include <functional>
 
 #include "call/CallController.hpp"
 #include "network/Server.hpp"

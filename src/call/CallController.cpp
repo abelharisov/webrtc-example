@@ -4,6 +4,10 @@
 #include <sstream>
 #include <webrtc/modules/video_capture/video_capture_factory.h>
 #include <webrtc/media/engine/webrtcvideocapturerfactory.h>
+#include <webrtc/base/ssladapter.h>
+#include <webrtc/base/thread.h>
+#include <webrtc/base/physicalsocketserver.h>
+
 #include <Poco/JSON/Parser.h>
 #include <Poco/JSON/Stringifier.h>
 #include <Poco/JSON/Object.h>
@@ -14,10 +18,31 @@ namespace call
 {
 
 CallController::CallController(RequestSenderInterface& requestSender)
-    : peerConnectionFactory(webrtc::CreatePeerConnectionFactory()),
-      requestSender(requestSender),
+    : requestSender(requestSender),
       state(State::IDLE)
-{}
+{
+  rtc::InitializeSSL();
+  rtc::InitRandom(rtc::Time());
+  rtc::ThreadManager::Instance()->WrapCurrentThread();
+
+  auto signalingThread = new rtc::Thread();
+  auto workerThread = new rtc::Thread();
+
+  signalingThread->SetName("signaling_thread", nullptr);
+  workerThread->SetName("worker_thread", nullptr);
+
+  if (!signalingThread->Start() || !workerThread->Start()) {
+    throw std::runtime_error("Cant run rtc threads");
+  }
+
+  peerConnectionFactory = webrtc::CreatePeerConnectionFactory(
+          signalingThread,
+          workerThread,
+          nullptr,
+          nullptr,
+          nullptr
+  ).release();
+}
 
 void CallController::call(const std::string &callee)
 {
