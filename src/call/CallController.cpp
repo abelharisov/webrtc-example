@@ -56,7 +56,7 @@ void CallController::call(const std::string &callee)
 
   peerConnection = createPeerConnection();
   configureOutputMedia(peerConnection);
-  peerConnection->CreateOffer(this, nullptr);
+  peerConnection->CreateOffer(this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
 }
 
 bool CallController::onCallRequest(const std::string &caller, const std::string &data)
@@ -70,9 +70,10 @@ bool CallController::onCallRequest(const std::string &caller, const std::string 
   remoteAddress = caller;
 
   Poco::JSON::Parser parser;
-  auto callData = parser.parse(data).extract<Poco::JSON::Object>();
-  auto type = callData.getValue<std::string>("type");
-  auto sdp = callData.getValue<std::string>("sdp");
+  auto parsed = parser.parse(data);
+  auto callData = parsed.extract<Poco::JSON::Object::Ptr>();
+  auto type = callData->getValue<std::string>("type");
+  auto sdp = callData->getValue<std::string>("sdp");
 
   webrtc::PeerConnectionInterface::RTCConfiguration rtcConfiguration;
   peerConnection = peerConnectionFactory->CreatePeerConnection(rtcConfiguration, nullptr, nullptr, this);
@@ -163,9 +164,11 @@ void CallController::configureOutputMedia(rtc::scoped_refptr<webrtc::PeerConnect
   std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> deviceInfo(webrtc::VideoCaptureFactory::CreateDeviceInfo());
   for (int i = 0; i < deviceInfo->NumberOfDevices(); ++i)
   {
-    std::string name(256, 0);
-    std::string id(256, 0);
-    deviceInfo->GetDeviceName(i, &name[0], name.size(), &id[0], id.size());
+    const uint32_t kSize = 256;
+    char name[kSize] = {0};
+    char id[kSize] = {0};
+    deviceInfo->GetDeviceName(i, name, kSize, id, kSize);
+    std::cout << name << id << std::endl;
     videoCapturer = factory.Create(cricket::Device(name, id));
     if (videoCapturer) {
       break;
@@ -176,18 +179,20 @@ void CallController::configureOutputMedia(rtc::scoped_refptr<webrtc::PeerConnect
     throw std::runtime_error("Can not configure video");
   }
 
-  auto audioTrack = peerConnectionFactory->CreateAudioTrack("", peerConnectionFactory->CreateAudioSource(nullptr));
-  auto videoTrack = peerConnectionFactory->CreateVideoTrack("", peerConnectionFactory->CreateVideoSource(std::move(videoCapturer), nullptr));
+  auto audioTrack = peerConnectionFactory->CreateAudioTrack("audio_label", peerConnectionFactory->CreateAudioSource(cricket::AudioOptions()));
+  auto videoTrack = peerConnectionFactory->CreateVideoTrack("video_label", peerConnectionFactory->CreateVideoSource(std::move(videoCapturer), nullptr));
   auto stream = peerConnectionFactory->CreateLocalMediaStream("");
-  stream->AddTrack(audioTrack);
-  stream->AddTrack(videoTrack);
+//  stream->AddTrack(audioTrack);
+//  stream->AddTrack(videoTrack);
 
-  peerConnection->AddStream(stream);
+  peerConnection->AddTrack(audioTrack, {});
+  peerConnection->AddTrack(videoTrack, {});
 }
 
 rtc::scoped_refptr<webrtc::PeerConnectionInterface> CallController::createPeerConnection()
 {
   webrtc::PeerConnectionInterface::RTCConfiguration rtcConfiguration;
+  rtcConfiguration.enable_dtls_srtp = rtc::Optional<bool>(true);
   webrtc::PeerConnectionInterface::IceServer server;
   server.uri = "stun:stun.l.google.com:19302";
   rtcConfiguration.servers.push_back(server);

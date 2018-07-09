@@ -16,6 +16,7 @@ HttpRequestHandler::HttpRequestHandler(network::RequestHandlerInterface &request
 
 void HttpRequestHandler::handleRequest(Poco::Net::HTTPServerRequest &request, Poco::Net::HTTPServerResponse &response)
 {
+  std::cout << "new request" << std::endl;
   Poco::URI uri(request.getURI());
   auto path = uri.getPath();
   auto caller = request.clientAddress().toString();
@@ -27,15 +28,15 @@ void HttpRequestHandler::handleRequest(Poco::Net::HTTPServerRequest &request, Po
 
   try
   {
-    if (path == "call")
+    if (path == "/call")
     {
       result = requestHandler.onCallRequest(caller, data);
     }
-    else if (path == "answer")
+    else if (path == "/answer")
     {
       result = requestHandler.onAnswerRequest(caller, data);
     }
-    else if (path == "iceCandidate")
+    else if (path == "/iceCandidate")
     {
       result = requestHandler.onIceCandidateRequest(caller, data);
     }
@@ -52,8 +53,12 @@ void HttpRequestHandler::handleRequest(Poco::Net::HTTPServerRequest &request, Po
   }
   else
   {
+    std::cerr << "request handling fail" << std::endl;
     response.setStatus(response.HTTP_BAD_REQUEST);
   }
+
+  response.add("Content-Length", "0");
+  response.send();
 }
 
 }
