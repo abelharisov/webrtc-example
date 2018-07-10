@@ -4,6 +4,7 @@
 #include <Poco/Event.h>
 #include <Poco/NamedEvent.h>
 #include <Poco/Process.h>
+#include <Poco/Process_WIN32.h>
 
 #include "call/CallController.hpp"
 #include "network/Server.hpp"
@@ -34,7 +35,7 @@ int main(int argc, char *argv[])
   callController.call(address);
 
 #if defined(POCO_OS_FAMILY_WINDOWS)
-  Poco::NamedEvent terminator(ProcessImpl::terminationEventName(Process::id()));
+  Poco::NamedEvent terminator(Poco::ProcessImpl::terminationEventName(Poco::Process::id()));
 #else
   Poco::Event terminator;
 #endif

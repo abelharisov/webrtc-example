@@ -3,22 +3,23 @@ project(webrtc-example)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(BITS 64)
+else ()
+    set(BITS 86)
+endif ()
 
 if (WIN32)
     add_definitions(-DWEBRTC_WIN)
-endif(WIN32)
+	add_definitions(-DNOMINMAX)
+	set(LIB_EXTENSION lib)
+endif (WIN32)
+
 if (UNIX)
     add_definitions(-DWEBRTC_POSIX)
-endif(UNIX)
-
-if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    link_directories(libs/webrtc/lib/x64/Debug)
-    link_directories(libs/webrtc/lib/x86/Debug)
-else()
-    link_directories(libs/webrtc/lib/x64/Release)
-    link_directories(libs/webrtc/lib/x86/Release)
-endif()
+	add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+	set(LIB_EXTENSION a)
+endif (UNIX)
 
 add_subdirectory(libs/poco)
 add_subdirectory(libs/sdl)
@@ -26,15 +27,6 @@ add_subdirectory(libs/sdl)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(libs/sdl/include)
 include_directories(libs/webrtc/include)
-
-execute_process(
-        COMMAND tar -xf webrtc-16937-cf6f3f6-linux-x64.tar.gz -C .
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/libs/webrtc
-)
-execute_process(
-        COMMAND tar -xf webrtc-16937-cf6f3f6-linux-x86.tar.gz -C .
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/libs/webrtc
-)
 
 add_executable(
         webrtc-example
@@ -65,6 +57,21 @@ target_link_libraries(
         Poco::Util
         Poco::Foundation
         SDL2
-        webrtc_full
-        X11
+		optimized ${CMAKE_SOURCE_DIR}/libs/webrtc/lib/x${BITS}/Release/libwebrtc_full.${LIB_EXTENSION}
+		debug ${CMAKE_SOURCE_DIR}/libs/webrtc/lib/x${BITS}/Debug/libwebrtc_full.${LIB_EXTENSION}
 )
+
+if (WIN32)
+	target_link_libraries(
+		webrtc-example 
+		Strmiids.lib 
+		Secur32.lib 
+		msdmo.lib 
+		dmoguids.lib 
+		wmcodecdspuuid.lib
+	)
+endif ()
+
+if (UNIX)
+	target_link_libraries(webrtc-example X11)
+endif ()	

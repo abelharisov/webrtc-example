@@ -1,13 +1,30 @@
-## webrtc
-Download precompiled libraries [here](https://sourcey.com/precompiled-webrtc-libraries/)
+# build
+* fetch submodules:
+```
+git submodule init
+git submodule update
+```
 
-Select version `branch-heads/58` for your platform and arch.
+* build on linux
+```
+./webrtc-prepare.sh
+mkdir build
+cd build
+cmake ..
+make
+```
 
-Extract archive to directory `./webrtc`
-
-## poco
-cmake -DPOCO_STATIC=1 -DCMAKE_C_COMPILER=/usr/bin/gcc-4.8 -DCMAKE_CXX_COMPILER=/usr/bin/g++-4.8 ..
-
-
-sudo add-apt-repository ppa:zosrothko/pocoproject
-sudo apt-get update
+* build on windows (Visual Studio 2015 Update 3)
+```
+./webrtc-prepare.bat
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+ 
+# run
+```
+./webrtc-example 8888
+```
+and enter `ip:port` of another instance
