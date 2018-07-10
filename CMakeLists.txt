@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
-project(dins)
+project(webrtc-example)
 
 set(CMAKE_CXX_STANDARD 11)
 
 add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+
 if (WIN32)
     add_definitions(-DWEBRTC_WIN)
 endif(WIN32)
@@ -36,7 +37,7 @@ execute_process(
 )
 
 add_executable(
-        dins
+        webrtc-example
         src/main.cpp
         src/call/CallController.cpp
         src/call/CallController.hpp
@@ -58,7 +59,7 @@ add_executable(
 )
 
 target_link_libraries(
-        dins
+        webrtc-example
         Poco::Net
         Poco::JSON
         Poco::Util
