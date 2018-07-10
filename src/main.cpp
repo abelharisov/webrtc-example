@@ -4,7 +4,10 @@
 #include <Poco/Event.h>
 #include <Poco/NamedEvent.h>
 #include <Poco/Process.h>
+
+#if defined(POCO_OS_FAMILY_WINDOWS)
 #include <Poco/Process_WIN32.h>
+#endif
 
 #include "call/CallController.hpp"
 #include "network/Server.hpp"
