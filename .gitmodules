@@ -1,0 +1,6 @@
+[submodule "libs/poco"]
+	path = libs/poco
+	url = https://github.com/pocoproject/poco.git
+[submodule "libs/sdl"]
+	path = libs/sdl
+	url = https://github.com/SDL-mirror/SDL.git

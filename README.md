@@ -7,3 +7,7 @@ Extract archive to directory `./webrtc`
 
 ## poco
 cmake -DPOCO_STATIC=1 -DCMAKE_C_COMPILER=/usr/bin/gcc-4.8 -DCMAKE_CXX_COMPILER=/usr/bin/g++-4.8 ..
+
+
+sudo add-apt-repository ppa:zosrothko/pocoproject
+sudo apt-get update
